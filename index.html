@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>もしも宇宙シューター - 暴走した太陽系を切り抜けろ</title>
+  <meta name="description" content="もしも宇宙ラボの実験で重力が暴走!はぐれ惑星・彗星・恒星化した木星・ブラックホールが襲いかかる宇宙シューティング。研究艇〈ラボ号〉で太陽系を駆け抜けろ。">
+  <meta name="theme-color" content="#05030f">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="もしも宇宙シューター">
+  <meta property="og:description" content="重力が暴走した太陽系を、研究艇〈ラボ号〉で切り抜ける宇宙シューティング。">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="stylesheet" href="css/style.css?v=1">
+</head>
+<body>
+  <canvas id="view"></canvas>
+
+  <!-- ===== ゲーム中 HUD ===== -->
+  <div id="hud">
+    <div class="hud-row">
+      <div class="hud-block">
+        <span class="hud-label">SCORE</span>
+        <span id="hud-score" class="hud-val">0</span>
+        <span id="hud-combo" class="hud-combo"></span>
+      </div>
+      <div class="hud-block right">
+        <span class="hud-label">HI</span>
+        <span id="hud-hi" class="hud-val small">0</span>
+        <span class="hud-label">WAVE</span>
+        <span id="hud-wave" class="hud-val small">0</span>
+      </div>
+    </div>
+    <div class="hud-row second">
+      <span id="hud-lives" class="hud-lives">♥♥♥</span>
+      <div class="health-bar"><div id="health-fill"></div></div>
+      <span class="hud-tag" id="hud-weapon">Lv1</span>
+      <span class="hud-tag bomb">💣<span id="hud-bombs">×1</span></span>
+    </div>
+  </div>
+
+  <!-- ボス HP -->
+  <div id="boss-bar">
+    <div id="boss-name"></div>
+    <div class="boss-track"><div id="boss-fill"></div></div>
+  </div>
+
+  <!-- 右上ボタン -->
+  <button id="pause-btn" class="corner-btn" aria-label="ポーズ">⏸</button>
+
+  <!-- ボム(モバイル) -->
+  <button id="bomb-btn" aria-label="ボム">💣</button>
+
+  <!-- バナー / トースト -->
+  <div id="banner"></div>
+  <div id="toast"></div>
+
+  <!-- ===== スタート画面 ===== -->
+  <div id="start-screen" class="screen">
+    <div class="screen-inner">
+      <div class="logo">🚀</div>
+      <h1 class="title">もしも宇宙シューター</h1>
+      <p class="tagline">重力が暴走した太陽系を、研究艇〈ラボ号〉で切り抜けろ</p>
+
+      <button id="start-btn" class="btn-primary">▶ ゲーム開始</button>
+
+      <div class="howto">
+        <div class="howto-item"><b>📱 動かす</b>画面をドラッグ(キーボードは WASD / 矢印)</div>
+        <div class="howto-item"><b>🔫 攻撃</b>自動で発射。アイテムでショット強化</div>
+        <div class="howto-item"><b>💣 ボム</b>右下ボタン / スペースで全体攻撃</div>
+        <div class="howto-item"><b>🎯 目標</b>5ウェーブごとの「もしもボス」を倒せ</div>
+      </div>
+
+      <div class="settings">
+        <button id="sfx-toggle" class="btn-toggle"></button>
+        <button id="bgm-toggle" class="btn-toggle"></button>
+      </div>
+      <p class="hi-line">ハイスコア: <b id="start-hi">0</b></p>
+      <p class="credit">「もしも宇宙ラボ」ワールド より</p>
+    </div>
+  </div>
+
+  <!-- ===== ポーズ画面 ===== -->
+  <div id="pause-screen" class="screen">
+    <div class="screen-inner">
+      <h2 class="title sm">⏸ ポーズ</h2>
+      <button id="resume-btn" class="btn-primary">▶ 再開</button>
+      <button id="quit-btn" class="btn-ghost">タイトルへ戻る</button>
+    </div>
+  </div>
+
+  <!-- ===== ゲームオーバー画面 ===== -->
+  <div id="gameover-screen" class="screen">
+    <div class="screen-inner">
+      <h2 class="title sm">GAME OVER</h2>
+      <div id="go-new" class="newrecord">🏆 ハイスコア更新!</div>
+      <div class="result">
+        <div class="result-row"><span>スコア</span><b id="go-score">0</b></div>
+        <div class="result-row"><span>到達ウェーブ</span><b id="go-wave">0</b></div>
+        <div class="result-row"><span>ハイスコア</span><b id="go-hi">0</b></div>
+      </div>
+      <button id="go-restart" class="btn-primary">↻ もう一度</button>
+      <div class="go-actions">
+        <button id="go-share" class="btn-ghost">📤 結果を共有</button>
+        <button id="go-menu" class="btn-ghost">タイトル</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js?v=1"></script>
+</body>
+</html>

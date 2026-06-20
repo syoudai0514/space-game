@@ -1,0 +1,21 @@
+# 依存パッケージ(npm install で復元)
+node_modules/
+
+# Capacitor 用にビルド生成される配布フォルダ(build:web で再生成)
+www/
+
+# Android ビルド成果物
+android/app/build/
+android/build/
+android/.gradle/
+android/captures/
+android/local.properties
+android/app/release/
+*.apk
+*.aab
+*.keystore
+*.jks
+
+# OS / エディタ
+.DS_Store
+*.log

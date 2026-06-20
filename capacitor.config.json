@@ -1,0 +1,13 @@
+{
+  "appId": "com.moshimospace.shooter",
+  "appName": "もしも宇宙シューター",
+  "webDir": "www",
+  "backgroundColor": "#05030f",
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1000,
+      "backgroundColor": "#05030f",
+      "showSpinner": false
+    }
+  }
+}
