@@ -2,9 +2,11 @@
 // 描画は Canvas 2D。ループ駆動は main.js が担当する。
 
 import { TAU, clamp, rand, randInt, pick, chance, hitCircle, shake, fmt } from './util.js';
-import { Player, Bullet, Enemy, PowerUp, Boss } from './entities.js';
+import { Player, Bullet, Enemy, PowerUp, Boss, Crystal } from './entities.js';
 import { Starfield } from './starfield.js';
 import { Sfx, startBgm, stopBgm } from './audio.js';
+import * as Meta from './meta.js';
+import * as Monet from './monetize.js';
 
 const HISCORE_KEY = 'mss-hiscore';
 const POWER_TYPES = ['double', 'double', 'shield', 'heal', 'bomb', 'speed'];
@@ -43,7 +45,14 @@ export class Game {
     this.enemies = [];
     this.powerups = [];
     this.particles = [];
+    this.crystals = [];      // 💎スターダスト
+    this.floats = [];        // フローティングテキスト(+score など)
     this.boss = null;
+    this.runStardust = 0;    // このランで集めた💎
+    this.magnetRange = 0;
+    this.freeRevives = 0;
+    this.adReviveUsed = false;
+    this.committed = false;
     this.score = 0;
     this.combo = 1;
     this.comboT = 0;
@@ -62,12 +71,28 @@ export class Game {
   start() {
     this.reset();
     this.player = new Player(this.W, this.H);
+    // 永続アップグレードを反映(パワーファンタジー = 強くなった実感)
+    const b = Meta.bonuses();
+    this.player.maxHealth = b.maxHealth;
+    this.player.health = b.maxHealth;
+    this.player.weapon = clamp(b.startWeapon, 1, 5);
+    this.player.bombs = b.startBombs;
+    this.player.baseFireRate = 0.16 * b.fireRateMul;
+    this.magnetRange = b.magnetRange;
+    this.freeRevives = b.freeRevives;
+    this.adReviveUsed = false;
+    this.committed = false;
+    this.runStardust = 0;
+    this.runStartHi = this.hiscore;   // 「記録更新」判定はラン開始前の値と比べる
     this.state = 'playing';
     this.over = false;
     this.nextWave();
     startBgm();
     this.syncHud();
   }
+
+  // 難易度係数: ウェーブが進むほど上がる(なめらかな逓増曲線)
+  get diff() { return 1 + (this.wave - 1) * 0.09; }
 
   togglePause() {
     if (this.state === 'playing') { this.state = 'paused'; stopBgm(0.4); this.ui.showPause(true); }
@@ -81,7 +106,7 @@ export class Game {
     if (this.wave % 5 === 0) {
       // ボスウェーブ
       Sfx.bossWarn();
-      this.boss = new Boss(this.W, this.H, this.bossIndex);
+      this.boss = new Boss(this.W, this.H, this.bossIndex, this.diff);
       this.ui.bannerBoss(this.boss.def);
       this.toSpawn = 0;
     } else {
@@ -109,7 +134,7 @@ export class Game {
     if (this.wave < 2) kind = roll < 0.85 ? 'asteroid' : 'comet';
     else if (this.wave < 4) kind = roll < 0.6 ? 'asteroid' : roll < 0.85 ? 'comet' : 'alien';
     else kind = roll < 0.45 ? 'asteroid' : roll < 0.68 ? 'comet' : roll < 0.86 ? 'alien' : 'planet';
-    this.enemies.push(new Enemy(kind, x, -30));
+    this.enemies.push(new Enemy(kind, x, -30, { diff: this.diff }));
   }
 
   // ---------- ヘルパー(entities から呼ばれる) ----------
@@ -143,6 +168,20 @@ export class Game {
   dropPowerUp(x, y) { this.powerups.push(new PowerUp(x, y, pick(POWER_TYPES))); }
   toast(msg) { this.ui.toast(msg); }
 
+  // 💎スターダスト: 落とす / 回収する
+  dropStardust(x, y, value) {
+    const n = clamp(Math.round(value / 2), 1, 8);    // 個数に分割して撒く(集める手応え)
+    for (let i = 0; i < n; i++) this.crystals.push(new Crystal(x, y, Math.ceil(value / n)));
+  }
+  collectStardust(value) {
+    this.runStardust += value;
+    Sfx.shield(); // 軽いキラッ音
+    this.syncHud();
+  }
+  float(x, y, text, color, size = 14) {
+    this.floats.push({ x, y, vy: -40, text, color, size, life: 0.9, maxLife: 0.9 });
+  }
+
   useBomb() {
     if (this.state !== 'playing' || !this.player || this.player.bombs <= 0) return;
     this.player.bombs--;
@@ -161,9 +200,45 @@ export class Game {
     this.state = 'over';
     stopBgm();
     Sfx.gameOver();
-    const isHi = this.score >= this.hiscore;
+    const isHi = this.score > this.runStartHi;
     this.saveHi();
-    setTimeout(() => this.ui.showGameOver(this.score, this.hiscore, this.wave, isHi), 700);
+    Meta.recordRun(this.wave, this.score);
+    Monet.noteGameOver();
+    setTimeout(() => this.ui.showGameOver({
+      score: this.score, hiscore: this.hiscore, wave: this.wave, isHi,
+      stardust: this.runStardust,
+      canRevive: this.canRevive(),
+      reviveIsFree: this.freeRevives > 0,
+    }), 700);
+  }
+
+  canRevive() { return this.freeRevives > 0 || !this.adReviveUsed; }
+
+  // コンティニュー(復活)。useAd=true なら広告視聴ぶん、false なら無料リバイブ消費。
+  revive(useAd) {
+    if (!this.player) return;
+    if (useAd) this.adReviveUsed = true; else this.freeRevives = Math.max(0, this.freeRevives - 1);
+    this.over = false;
+    this.state = 'playing';
+    this.player.dead = false;
+    this.player.lives = Math.max(this.player.lives, 0);
+    this.player.health = this.player.maxHealth;
+    this.player.invuln = 2.8;
+    this.player.x = this.player.tx = this.W / 2;
+    this.player.y = this.player.ty = this.H - 120;
+    this.enemyBullets = [];
+    this.flash = 0.5;
+    startBgm();
+    this.syncHud();
+  }
+
+  doubleStardust() { this.runStardust *= 2; this.syncHud(); }
+
+  // ランで集めた💎を所持金に確定(離脱時に1回だけ)
+  commitRun() {
+    if (this.committed) return;
+    Meta.addStardust(this.runStardust);
+    this.committed = true;
   }
 
   syncHud() {
@@ -174,6 +249,7 @@ export class Game {
       bombs: this.player ? this.player.bombs : 0,
       weapon: this.player ? this.player.weapon : 1,
       combo: this.combo,
+      stardust: this.runStardust,
       boss: this.boss ? { hp: this.boss.hp / this.boss.maxHp, name: this.boss.def.name } : null,
     });
   }
@@ -187,9 +263,11 @@ export class Game {
     this.shakeAmt = Math.max(0, this.shakeAmt - dt * 30);
     this.toastT = Math.max(0, this.toastT - dt);
 
-    // パーティクルは状態に依らず進める
+    // パーティクル/フローティングテキストは状態に依らず進める
     for (const p of this.particles) updateParticle(p, dt);
     this.particles = this.particles.filter((p) => p.life > 0);
+    for (const f of this.floats) { f.y += f.vy * dt; f.life -= dt; }
+    this.floats = this.floats.filter((f) => f.life > 0);
 
     if (this.state !== 'playing') return;
 
@@ -218,6 +296,7 @@ export class Game {
     for (const b of this.enemyBullets) b.update(dt, this);
     for (const e of this.enemies) e.update(dt, this);
     for (const p of this.powerups) p.update(dt, this);
+    for (const c of this.crystals) c.update(dt, this);
 
     this.collisions();
 
@@ -225,6 +304,7 @@ export class Game {
     this.enemyBullets = this.enemyBullets.filter((b) => !b.dead);
     this.enemies = this.enemies.filter((e) => !e.dead);
     this.powerups = this.powerups.filter((p) => !p.dead);
+    this.crystals = this.crystals.filter((c) => !c.dead);
 
     this.syncHud();
   }
@@ -278,12 +358,14 @@ export class Game {
     this.stars.render(ctx);
 
     for (const pw of this.powerups) pw.render(ctx);
+    for (const c of this.crystals) c.render(ctx);
     for (const e of this.enemies) e.render(ctx);
     if (this.boss) this.boss.render(ctx);
     for (const b of this.bullets) b.render(ctx);
     for (const b of this.enemyBullets) b.render(ctx);
     if (this.player && !this.player.dead) this.player.render(ctx);
     for (const p of this.particles) renderParticle(ctx, p);
+    this.renderFloats(ctx);
 
     ctx.restore();
 
@@ -291,6 +373,18 @@ export class Game {
       ctx.fillStyle = `rgba(255,255,255,${this.flash * 0.5})`;
       ctx.fillRect(0, 0, this.W, this.H);
     }
+  }
+
+  renderFloats(ctx) {
+    ctx.save();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const f of this.floats) {
+      ctx.globalAlpha = clamp(f.life / f.maxLife, 0, 1);
+      ctx.font = `800 ${f.size}px system-ui, sans-serif`;
+      ctx.fillStyle = f.color; ctx.shadowColor = f.color; ctx.shadowBlur = 8;
+      ctx.fillText(f.text, f.x, f.y);
+    }
+    ctx.restore();
   }
 }
 

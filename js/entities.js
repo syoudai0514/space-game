@@ -206,6 +206,11 @@ export class Enemy {
       this.score = 150;
       this.swing = rand(TAU);
     }
+    // 難易度スケーリング: ウェーブが進むほど硬く・速くなる(なめらかな逓増)
+    const d = opt.diff ?? 1;
+    this.maxHp = this.hp = Math.max(this.hp, Math.ceil(this.hp * (0.7 + d * 0.3)));
+    this.vy *= 1 + (d - 1) * 0.22;
+    this.diff = d;
   }
 
   update(dt, game) {
@@ -243,13 +248,17 @@ export class Enemy {
   onDeath(game) {
     this.dead = true;
     game.addScore(this.score);
+    // 💎スターダストを落とす(集める快感 + 永続強化の通貨)
+    const sd = this.kind === 'planet' ? 6 : this.kind === 'alien' ? 4 : this.kind === 'comet' ? 2 : 1;
+    game.dropStardust(this.x, this.y, sd);
+    game.float(this.x, this.y - this.r, '+' + Math.round(this.score * game.combo), '#cfe2ff', 13);
     const col = this.kind === 'comet' ? '#9fe0ff' : this.kind === 'planet' ? this.col[0] : this.kind === 'alien' ? '#a6ff9f' : '#d8b48a';
     game.spawnExplosion(this.x, this.y, col, this.kind === 'planet' ? 26 : 16, this.r / 18);
     Sfx.explode();
     // 小惑星は分裂
     if (this.kind === 'asteroid' && this.r > 20) {
       for (let i = 0; i < 2; i++) {
-        const e = new Enemy('asteroid', this.x, this.y, { r: this.r * 0.55 });
+        const e = new Enemy('asteroid', this.x, this.y, { r: this.r * 0.55, diff: this.diff });
         e.vx = rand(-90, 90); e.vy = rand(60, 120);
         game.enemies.push(e);
       }
@@ -354,13 +363,14 @@ const BOSS_DEFS = [
 ];
 
 export class Boss {
-  constructor(W, H, index) {
+  constructor(W, H, index, diff = 1) {
     this.def = BOSS_DEFS[index % BOSS_DEFS.length];
     this.tier = Math.floor(index / BOSS_DEFS.length); // 周回ごとに強化
     this.x = W / 2; this.y = -120;
     this.targetY = 130;
     this.r = 70;
-    this.maxHp = this.hp = Math.round((this.def.id === 'blackhole' ? 260 : 320) * (1 + this.tier * 0.6));
+    const base = (this.def.id === 'blackhole' ? 260 : 320) * (1 + this.tier * 0.6);
+    this.maxHp = this.hp = Math.round(base * (1 + (diff - 1) * 0.35)); // ウェーブが進むほど硬い
     this.t = 0;
     this.fireCd = 2;
     this.phase = 0;
@@ -433,6 +443,8 @@ export class Boss {
   onDeath(game) {
     this.dead = true;
     game.addScore(2000 * (1 + this.tier));
+    game.dropStardust(this.x, this.y, 40 + this.tier * 20); // ボス撃破は💎大量
+    game.float(this.x, this.y, 'BOSS DOWN!', '#ffd23a', 22);
     for (let i = 0; i < 6; i++) {
       setTimeout(() => game.spawnExplosion(this.x + rand(-this.r, this.r), this.y + rand(-this.r, this.r), this.def.color, 30, 3), i * 90);
     }
@@ -465,6 +477,55 @@ export class Boss {
       for (let i = 0; i < 12; i++) { const a = (i / 12) * TAU; const rr = this.r * (0.85 + (i % 2) * 0.2); i === 0 ? ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr) : ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); }
       ctx.closePath(); ctx.fillStyle = g; ctx.shadowColor = c; ctx.shadowBlur = 20; ctx.fill();
     }
+    ctx.restore();
+  }
+}
+
+// ---------------- スターダスト(💎 通貨) ----------------
+// 敵が落とす。プレイヤーに近づくと吸い寄せられ(マグネット強化で範囲拡大)、
+// 触れると回収。集める手応えが「もう1回」を生む。
+export class Crystal {
+  constructor(x, y, value) {
+    this.x = x; this.y = y; this.value = value;
+    this.r = 6 + Math.min(6, value * 0.3);
+    this.vx = rand(-50, 50); this.vy = rand(-40, 30);
+    this.t = rand(TAU); this.dead = false; this.life = 12;
+  }
+  update(dt, game) {
+    this.t += dt * 6;
+    this.life -= dt;
+    const p = game.player;
+    if (p && !p.dead) {
+      const dx = p.x - this.x, dy = p.y - this.y;
+      const d = Math.hypot(dx, dy) || 1;
+      const range = 60 + (game.magnetRange || 0);
+      if (d < range) {
+        // 吸引
+        const pull = 600 * (1 - d / range);
+        this.vx += (dx / d) * pull * dt;
+        this.vy += (dy / d) * pull * dt;
+      }
+      if (d < p.r + this.r + 4) { this.collect(game); return; }
+    }
+    this.vy += 120 * dt;        // ゆるい重力で落ちる
+    this.vx *= 0.98;
+    this.x += this.vx * dt; this.y += this.vy * dt;
+    if (this.y > game.H + 30 || this.life <= 0) this.dead = true;
+  }
+  collect(game) {
+    this.dead = true;
+    game.collectStardust(this.value);
+  }
+  render(ctx) {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.t * 0.3);
+    const s = this.r + Math.sin(this.t) * 1.2;
+    ctx.beginPath();
+    ctx.moveTo(0, -s); ctx.lineTo(s * 0.7, 0); ctx.lineTo(0, s); ctx.lineTo(-s * 0.7, 0);
+    ctx.closePath();
+    ctx.fillStyle = '#9fe7ff'; ctx.shadowColor = '#5fd0ff'; ctx.shadowBlur = 14; ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.3, 0, TAU); ctx.fillStyle = '#eafaff'; ctx.fill();
     ctx.restore();
   }
 }

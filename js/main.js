@@ -1,7 +1,9 @@
 // 起動・入力・DOM(画面/HUD)配線・メインループ。
 
 import { Game } from './game.js';
-import { unlock, toggleSfx, toggleBgm, sfxEnabled, bgmEnabled, Sfx } from './audio.js';
+import { unlock, toggleSfx, toggleBgm, sfxEnabled, bgmEnabled, stopBgm, Sfx } from './audio.js';
+import * as Meta from './meta.js';
+import * as Monet from './monetize.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
@@ -10,12 +12,14 @@ const canvas = $('view');
 const el = {
   score: $('hud-score'), hi: $('hud-hi'), wave: $('hud-wave'),
   lives: $('hud-lives'), weapon: $('hud-weapon'), bombs: $('hud-bombs'),
-  combo: $('hud-combo'), healthFill: $('health-fill'),
+  combo: $('hud-combo'), healthFill: $('health-fill'), stardust: $('hud-stardust'),
   bossBar: $('boss-bar'), bossFill: $('boss-fill'), bossName: $('boss-name'),
   toast: $('toast'), banner: $('banner'),
-  start: $('start-screen'), startHi: $('start-hi'),
+  start: $('start-screen'), startHi: $('start-hi'), startBest: $('start-bestwave'), startSd: $('start-stardust'),
   pause: $('pause-screen'), gameover: $('gameover-screen'),
-  goScore: $('go-score'), goHi: $('go-hi'), goWave: $('go-wave'), goNew: $('go-new'),
+  goScore: $('go-score'), goHi: $('go-hi'), goWave: $('go-wave'), goNew: $('go-new'), goSd: $('go-stardust'),
+  goRevive: $('go-revive'), goDouble: $('go-double'),
+  shop: $('shop-screen'), shopSd: $('shop-stardust'), shopList: $('shop-list'),
   bombBtn: $('bomb-btn'), pauseBtn: $('pause-btn'),
   sfxBtn: $('sfx-toggle'), bgmBtn: $('bgm-toggle'),
 };
@@ -31,6 +35,7 @@ const ui = {
     el.weapon.textContent = 'Lv' + s.weapon;
     el.bombs.textContent = '×' + s.bombs;
     el.combo.textContent = s.combo >= 1.5 ? '×' + s.combo.toFixed(1) : '';
+    el.stardust.textContent = s.stardust || 0;
     el.lives.textContent = '♥'.repeat(Math.max(0, s.lives));
     el.healthFill.style.width = Math.round(s.health * 100) + '%';
     el.healthFill.style.background = s.health > 0.5 ? 'linear-gradient(90deg,#3affa0,#7fffd0)'
@@ -47,11 +52,20 @@ const ui = {
   bannerBoss(def) { showBanner('⚠ WARNING ⚠', def.name + '<br><span class="banner-sub">' + def.desc + '</span>', true); },
   toast(msg) { el.toast.innerHTML = msg; el.toast.classList.add('show'); toastT = 1.6; },
   showPause(on) { el.pause.classList.toggle('show', on); },
-  showGameOver(score, hi, wave, isNew) {
-    el.goScore.textContent = score.toLocaleString('en-US');
-    el.goHi.textContent = hi.toLocaleString('en-US');
-    el.goWave.textContent = wave;
-    el.goNew.style.display = isNew ? 'block' : 'none';
+  showGameOver(r) {
+    el.goScore.textContent = r.score.toLocaleString('en-US');
+    el.goHi.textContent = r.hiscore.toLocaleString('en-US');
+    el.goWave.textContent = r.wave;
+    el.goSd.textContent = r.stardust;
+    el.goNew.style.display = r.isHi ? 'block' : 'none';
+    // 復活ボタン: 残数があるとき or 1ラン1回の広告復活が可能なとき
+    el.goRevive.style.display = r.canRevive ? 'block' : 'none';
+    el.goRevive.textContent = r.reviveIsFree ? '❤️‍🔥 無料で復活して続ける' : '📺 広告を見て復活';
+    el.goRevive.disabled = false;
+    // 報酬2倍ボタン
+    el.goDouble.style.display = r.stardust > 0 ? 'block' : 'none';
+    el.goDouble.disabled = false;
+    el.goDouble.textContent = '📺 💎を2倍にする（' + r.stardust + '→' + r.stardust * 2 + '）';
     el.gameover.classList.add('show');
   },
 };
@@ -116,15 +130,91 @@ function applyKeyboard(dt) {
 function firstTouchUnlock() { unlock(); }
 ['pointerdown', 'keydown'].forEach((ev) => window.addEventListener(ev, firstTouchUnlock, { once: true }));
 
+function refreshTitle() {
+  el.startHi.textContent = game.hiscore.toLocaleString('en-US');
+  el.startBest.textContent = Meta.get().bestWave;
+  el.startSd.textContent = Meta.stardust();
+}
+function showTitle() { game.state = 'menu'; el.start.classList.add('show'); refreshTitle(); }
+
+// ランから離脱する共通処理: 集めた💎を確定 → たまにインタースティシャル広告
+async function leaveRun() {
+  game.commitRun();
+  if (Monet.shouldShowInterstitial()) { try { await Monet.showInterstitial(); } catch { /* ignore */ } }
+}
+
 $('start-btn').addEventListener('click', () => { Sfx.ui(); unlock(); el.start.classList.remove('show'); game.start(); });
-$('go-restart').addEventListener('click', () => { Sfx.ui(); el.gameover.classList.remove('show'); game.start(); });
-$('go-menu').addEventListener('click', () => { Sfx.ui(); el.gameover.classList.remove('show'); el.start.classList.add('show'); el.startHi.textContent = game.hiscore.toLocaleString('en-US'); game.state = 'menu'; });
+
+$('go-restart').addEventListener('click', async () => { Sfx.ui(); el.gameover.classList.remove('show'); await leaveRun(); game.start(); });
+$('go-menu').addEventListener('click', async () => { Sfx.ui(); el.gameover.classList.remove('show'); await leaveRun(); showTitle(); });
+$('go-shop').addEventListener('click', () => { Sfx.ui(); game.commitRun(); openShop('gameover'); });
+
+// リワード復活
+el.goRevive.addEventListener('click', async () => {
+  Sfx.ui();
+  el.goRevive.disabled = true;
+  if (game.freeRevives > 0) {
+    game.revive(false); el.gameover.classList.remove('show');
+  } else {
+    const r = await Monet.showRewarded('revive');
+    if (r.granted) { game.revive(true); el.gameover.classList.remove('show'); if (r.demo) ui.toast('デモ復活（アプリ版は広告視聴で復活）'); }
+    else { el.goRevive.disabled = false; ui.toast('広告を読み込めませんでした'); }
+  }
+});
+
+// リワード報酬2倍
+el.goDouble.addEventListener('click', async () => {
+  Sfx.ui();
+  el.goDouble.disabled = true;
+  const r = await Monet.showRewarded('double');
+  if (r.granted) { game.doubleStardust(); el.goSd.textContent = game.runStardust; el.goDouble.textContent = '✅ 2倍 獲得!'; if (r.demo) ui.toast('デモ: 💎2倍（アプリ版は広告視聴）'); }
+  else { el.goDouble.disabled = false; ui.toast('広告を読み込めませんでした'); }
+});
+
 $('resume-btn').addEventListener('click', () => { Sfx.ui(); game.togglePause(); });
-$('quit-btn').addEventListener('click', () => { Sfx.ui(); el.pause.classList.remove('show'); el.start.classList.add('show'); game.state = 'menu'; stopBgmSafe(); });
+$('quit-btn').addEventListener('click', () => { Sfx.ui(); game.commitRun(); el.pause.classList.remove('show'); stopBgm(); showTitle(); });
 el.pauseBtn.addEventListener('click', () => { Sfx.ui(); game.togglePause(); });
 el.bombBtn.addEventListener('click', () => game.useBomb());
 
-function stopBgmSafe() { import('./audio.js').then((m) => m.stopBgm()); }
+// ===== ショップ =====
+let shopFrom = 'title';
+function openShop(from) { shopFrom = from || 'title'; renderShop(); el.shop.classList.add('show'); }
+function renderShop() {
+  el.shopSd.textContent = Meta.stardust();
+  el.shopList.innerHTML = '';
+  for (const u of Meta.UPGRADES) {
+    const lv = Meta.level(u.id), max = Meta.maxLevel(u.id), maxed = Meta.isMax(u.id);
+    const row = document.createElement('div');
+    row.className = 'shop-item';
+    let pips = '';
+    for (let i = 0; i < max; i++) pips += `<div class="pip ${i < lv ? 'on' : ''}"></div>`;
+    const btn = maxed
+      ? '<button class="shop-buy maxed" disabled>MAX</button>'
+      : `<button class="shop-buy" data-id="${u.id}" ${Meta.canBuy(u.id) ? '' : 'disabled'}>💎 ${Meta.cost(u.id)}</button>`;
+    row.innerHTML = `<div class="shop-icon">${u.icon}</div>
+      <div class="shop-info"><div class="shop-name">${u.name} <span style="color:#7d92c0;font-size:11px">Lv${lv}/${max}</span></div>
+      <div class="shop-desc">${u.desc}</div><div class="shop-pips">${pips}</div></div>${btn}`;
+    el.shopList.appendChild(row);
+  }
+  el.shopList.querySelectorAll('.shop-buy[data-id]').forEach((b) => {
+    b.addEventListener('click', () => {
+      if (Meta.buy(b.dataset.id)) { Sfx.power(); renderShop(); }
+      else { Sfx.ui(); }
+    });
+  });
+}
+$('shop-btn').addEventListener('click', () => { Sfx.ui(); unlock(); openShop('title'); });
+$('shop-close').addEventListener('click', () => {
+  Sfx.ui(); el.shop.classList.remove('show');
+  if (shopFrom === 'gameover') { el.gameover.classList.remove('show'); showTitle(); }
+  else refreshTitle();
+});
+$('shop-remove-ads').addEventListener('click', async () => {
+  Sfx.ui();
+  const r = await Monet.purchaseRemoveAds();
+  if (r.ok) ui.toast('✅ 広告を削除しました。ありがとうございます!');
+  else ui.toast('🚫 アプリ版で購入できます');
+});
 
 function refreshToggles() {
   el.sfxBtn.textContent = '🔊 効果音: ' + (sfxEnabled() ? 'ON' : 'OFF');
@@ -146,7 +236,7 @@ $('go-share')?.addEventListener('click', async () => {
 });
 
 // 初期表示
-el.startHi.textContent = game.hiscore.toLocaleString('en-US');
+refreshTitle();
 el.start.classList.add('show');
 
 // ---- メインループ ----

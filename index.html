@@ -12,7 +12,7 @@
   <meta property="og:description" content="重力が暴走した太陽系を、研究艇〈ラボ号〉で切り抜ける宇宙シューティング。">
   <meta name="twitter:card" content="summary_large_image">
 
-  <link rel="stylesheet" href="css/style.css?v=1">
+  <link rel="stylesheet" href="css/style.css?v=2">
 </head>
 <body>
   <canvas id="view"></canvas>
@@ -37,6 +37,7 @@
       <div class="health-bar"><div id="health-fill"></div></div>
       <span class="hud-tag" id="hud-weapon">Lv1</span>
       <span class="hud-tag bomb">💣<span id="hud-bombs">×1</span></span>
+      <span class="hud-tag stardust">💎<span id="hud-stardust">0</span></span>
     </div>
   </div>
 
@@ -72,11 +73,13 @@
         <div class="howto-item"><b>🎯 目標</b>5ウェーブごとの「もしもボス」を倒せ</div>
       </div>
 
+      <button id="shop-btn" class="btn-secondary">🛒 強化ショップ <span class="badge">💎<span id="start-stardust">0</span></span></button>
+
       <div class="settings">
         <button id="sfx-toggle" class="btn-toggle"></button>
         <button id="bgm-toggle" class="btn-toggle"></button>
       </div>
-      <p class="hi-line">ハイスコア: <b id="start-hi">0</b></p>
+      <p class="hi-line">ハイスコア: <b id="start-hi">0</b> ／ 最高到達 WAVE <b id="start-bestwave">0</b></p>
       <p class="credit">「もしも宇宙ラボ」ワールド より</p>
     </div>
   </div>
@@ -99,15 +102,34 @@
         <div class="result-row"><span>スコア</span><b id="go-score">0</b></div>
         <div class="result-row"><span>到達ウェーブ</span><b id="go-wave">0</b></div>
         <div class="result-row"><span>ハイスコア</span><b id="go-hi">0</b></div>
+        <div class="result-row stardust-row"><span>💎 獲得スターダスト</span><b id="go-stardust">0</b></div>
       </div>
+
+      <!-- リワード復活: 一番気持ちよく収益性も高い導線 -->
+      <button id="go-revive" class="btn-revive">❤️‍🔥 復活して続ける</button>
+      <!-- リワード報酬2倍 -->
+      <button id="go-double" class="btn-secondary">📺 💎を2倍にする</button>
+
       <button id="go-restart" class="btn-primary">↻ もう一度</button>
       <div class="go-actions">
-        <button id="go-share" class="btn-ghost">📤 結果を共有</button>
+        <button id="go-shop" class="btn-ghost">🛒 ショップ</button>
+        <button id="go-share" class="btn-ghost">📤 共有</button>
         <button id="go-menu" class="btn-ghost">タイトル</button>
       </div>
     </div>
   </div>
 
-  <script type="module" src="js/main.js?v=1"></script>
+  <!-- ===== 強化ショップ画面 ===== -->
+  <div id="shop-screen" class="screen">
+    <div class="screen-inner shop-inner">
+      <h2 class="title sm">🛒 強化ショップ</h2>
+      <p class="shop-balance">所持: <b>💎 <span id="shop-stardust">0</span></b></p>
+      <div id="shop-list"></div>
+      <button id="shop-remove-ads" class="btn-removeads">🚫 広告を消す(有料版)</button>
+      <button id="shop-close" class="btn-primary">← 戻る</button>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js?v=2"></script>
 </body>
 </html>
