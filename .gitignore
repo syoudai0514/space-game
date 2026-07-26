@@ -1,5 +1,6 @@
 # 依存パッケージ(npm install で復元)
 node_modules/
+package-lock.json
 
 # Capacitor 用にビルド生成される配布フォルダ(build:web で再生成)
 www/
