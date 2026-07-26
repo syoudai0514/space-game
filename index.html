@@ -12,7 +12,7 @@
   <meta property="og:description" content="重力が暴走した太陽系を、研究艇〈ラボ号〉で切り抜ける宇宙シューティング。">
   <meta name="twitter:card" content="summary_large_image">
 
-  <link rel="stylesheet" href="css/style.css?v=2">
+  <link rel="stylesheet" href="css/style.css?v=3">
 </head>
 <body>
   <canvas id="view"></canvas>
@@ -74,6 +74,7 @@
       </div>
 
       <button id="shop-btn" class="btn-secondary">🛒 強化ショップ <span class="badge">💎<span id="start-stardust">0</span></span></button>
+      <button id="rank-btn" class="btn-secondary">🏆 世界ランキング</button>
 
       <div class="settings">
         <button id="sfx-toggle" class="btn-toggle"></button>
@@ -105,6 +106,15 @@
         <div class="result-row stardust-row"><span>💎 獲得スターダスト</span><b id="go-stardust">0</b></div>
       </div>
 
+      <!-- 世界ランキング登録 -->
+      <div id="rank-submit" class="rank-submit">
+        <div class="rank-name-row">
+          <input id="rank-name" class="rank-name" type="text" maxlength="12" placeholder="ニックネーム" autocomplete="off" spellcheck="false">
+          <button id="rank-send" class="btn-rank">🏆 ランキングに登録</button>
+        </div>
+        <div id="rank-result" class="rank-result"></div>
+      </div>
+
       <!-- リワード復活: 一番気持ちよく収益性も高い導線 -->
       <button id="go-revive" class="btn-revive">❤️‍🔥 復活して続ける</button>
       <!-- リワード報酬2倍 -->
@@ -112,6 +122,7 @@
 
       <button id="go-restart" class="btn-primary">↻ もう一度</button>
       <div class="go-actions">
+        <button id="go-rank" class="btn-ghost">🏆 順位</button>
         <button id="go-shop" class="btn-ghost">🛒 ショップ</button>
         <button id="go-share" class="btn-ghost">📤 共有</button>
         <button id="go-menu" class="btn-ghost">タイトル</button>
@@ -130,6 +141,21 @@
     </div>
   </div>
 
-  <script type="module" src="js/main.js?v=2"></script>
+  <!-- ===== 世界ランキング画面 ===== -->
+  <div id="rank-screen" class="screen">
+    <div class="screen-inner rank-inner">
+      <h2 class="title sm">🏆 世界ランキング</h2>
+      <p id="rank-mode" class="rank-mode"></p>
+      <div class="rank-tabs">
+        <button class="rank-tab active" data-period="all">全期間</button>
+        <button class="rank-tab" data-period="daily">24時間</button>
+      </div>
+      <div id="rank-list" class="rank-list"></div>
+      <button id="rank-refresh" class="btn-secondary">🔄 更新</button>
+      <button id="rank-close" class="btn-primary">← 戻る</button>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js?v=3"></script>
 </body>
 </html>

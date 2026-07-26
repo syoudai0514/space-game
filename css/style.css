@@ -193,6 +193,57 @@ html, body {
 .shop-buy:disabled { background: rgba(255,255,255,.1); color: #6d7ea6; cursor: default; }
 .shop-buy.maxed { background: rgba(120,220,160,.25); color: #aef0c8; }
 
+/* ===== 世界ランキング ===== */
+/* ゲームオーバー画面の登録ブロック */
+.rank-submit { margin: 0 0 14px; }
+.rank-name-row { display: flex; gap: 8px; }
+.rank-name {
+  flex: 1; min-width: 0; padding: 12px 14px; font-size: 15px; font-weight: 700;
+  color: #eaf3ff; background: rgba(255,255,255,.06); border: 1px solid rgba(120,170,255,.35);
+  border-radius: 13px; outline: none; -webkit-user-select: text; user-select: text;
+}
+.rank-name::placeholder { color: #6d7ea6; font-weight: 600; }
+.rank-name:focus { border-color: rgba(120,200,255,.7); box-shadow: 0 0 0 2px rgba(120,200,255,.2); }
+.btn-rank {
+  flex-shrink: 0; padding: 12px 14px; font-size: 14px; font-weight: 800; color: #06122a; cursor: pointer;
+  background: linear-gradient(135deg,#ffd27f,#ffb35a); border: none; border-radius: 13px;
+  box-shadow: 0 4px 16px rgba(255,180,90,.4);
+}
+.btn-rank:active { transform: scale(.96); }
+.btn-rank:disabled { background: rgba(255,255,255,.1); color: #6d7ea6; cursor: default; box-shadow: none; }
+.rank-result { font-size: 13px; font-weight: 700; color: #9fe7ff; margin-top: 8px; min-height: 18px; text-align: center; }
+.rank-result.err { color: #ff9a8a; }
+.rank-result .rank-big { font-size: 20px; color: #ffd23a; text-shadow: 0 0 10px rgba(255,210,58,.6); }
+
+/* ランキング画面 */
+.rank-inner { max-width: 400px; }
+.rank-mode { font-size: 12px; color: #9fb2d8; margin-bottom: 12px; min-height: 15px; }
+.rank-mode.offline { color: #ffbf8a; }
+.rank-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+.rank-tab {
+  flex: 1; padding: 10px; font-size: 13px; font-weight: 800; color: #bcd2f5; cursor: pointer;
+  background: rgba(90,140,255,.14); border: 1px solid rgba(120,170,255,.3); border-radius: 12px;
+}
+.rank-tab.active { color: #06122a; background: linear-gradient(135deg,#7fd0ff,#9fe7ff); border-color: transparent; }
+.rank-list {
+  display: grid; gap: 6px; margin-bottom: 14px; max-height: 54vh; overflow-y: auto;
+  min-height: 80px; text-align: left;
+}
+.rank-row {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(255,255,255,.05); border: 1px solid rgba(120,170,255,.18);
+  border-radius: 11px; padding: 9px 12px;
+}
+.rank-row.me { background: rgba(255,210,90,.14); border-color: rgba(255,210,90,.5); }
+.rank-pos { flex-shrink: 0; width: 30px; font-size: 15px; font-weight: 900; color: #9fb2d8; text-align: center; }
+.rank-row.top1 .rank-pos { color: #ffd23a; }
+.rank-row.top2 .rank-pos { color: #d7e2f2; }
+.rank-row.top3 .rank-pos { color: #ffb888; }
+.rank-nm { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; color: #eaf3ff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-wv { flex-shrink: 0; font-size: 11px; color: #7d92c0; }
+.rank-sc { flex-shrink: 0; font-size: 15px; font-weight: 800; color: #9fe7ff; font-variant-numeric: tabular-nums; }
+.rank-empty { text-align: center; color: #7d8aa8; font-size: 13px; padding: 24px 0; }
+
 /* タッチ端末ではモバイル用ボタンを表示 */
 @media (pointer: coarse) {
   #bomb-btn, #pause-btn { display: flex; }

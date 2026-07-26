@@ -4,6 +4,7 @@ import { Game } from './game.js';
 import { unlock, toggleSfx, toggleBgm, sfxEnabled, bgmEnabled, stopBgm, Sfx } from './audio.js';
 import * as Meta from './meta.js';
 import * as Monet from './monetize.js';
+import * as LB from './leaderboard.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
@@ -22,9 +23,12 @@ const el = {
   shop: $('shop-screen'), shopSd: $('shop-stardust'), shopList: $('shop-list'),
   bombBtn: $('bomb-btn'), pauseBtn: $('pause-btn'),
   sfxBtn: $('sfx-toggle'), bgmBtn: $('bgm-toggle'),
+  rank: $('rank-screen'), rankList: $('rank-list'), rankMode: $('rank-mode'),
+  rankSend: $('rank-send'), rankName: $('rank-name'), rankResult: $('rank-result'),
 };
 
 let bannerT = 0, toastT = 0;
+let lastResult = { score: 0, wave: 0 };  // 直近リザルト(ランキング登録用)
 
 // ---- UI コールバック(Game から呼ばれる) ----
 const ui = {
@@ -58,6 +62,13 @@ const ui = {
     el.goWave.textContent = r.wave;
     el.goSd.textContent = r.stardust;
     el.goNew.style.display = r.isHi ? 'block' : 'none';
+    // 世界ランキング登録ブロックの初期化
+    lastResult = { score: r.score, wave: r.wave };
+    el.rankName.value = LB.getName();
+    el.rankResult.textContent = '';
+    el.rankResult.classList.remove('err');
+    el.rankSend.disabled = r.score <= 0;
+    el.rankSend.textContent = '🏆 ランキングに登録';
     // 復活ボタン: 残数があるとき or 1ラン1回の広告復活が可能なとき
     el.goRevive.style.display = r.canRevive ? 'block' : 'none';
     el.goRevive.textContent = r.reviveIsFree ? '❤️‍🔥 無料で復活して続ける' : '📺 広告を見て復活';
@@ -214,6 +225,92 @@ $('shop-remove-ads').addEventListener('click', async () => {
   const r = await Monet.purchaseRemoveAds();
   if (r.ok) ui.toast('✅ 広告を削除しました。ありがとうございます!');
   else ui.toast('🚫 アプリ版で購入できます');
+});
+
+// ===== 世界ランキング =====
+let rankFrom = 'title';   // 'title' | 'gameover' — 閉じたときの戻り先
+let rankPeriod = 'all';
+
+// ゲームオーバー画面から「登録」
+el.rankSend.addEventListener('click', async () => {
+  Sfx.ui();
+  el.rankSend.disabled = true;
+  el.rankSend.textContent = '⏳ 送信中…';
+  el.rankResult.classList.remove('err');
+  el.rankResult.textContent = '';
+  const name = LB.setName(el.rankName.value);
+  el.rankName.value = name;
+  const res = await LB.submitScore({ name, score: lastResult.score, wave: lastResult.wave });
+  if (res.ok && res.online) {
+    el.rankSend.textContent = '✅ 登録しました';
+    el.rankResult.innerHTML = res.rank
+      ? `世界 <span class="rank-big">${res.rank}</span> 位!`
+      : '登録完了! 「順位」から確認できます';
+  } else if (res.ok && !res.online) {
+    el.rankSend.textContent = '✅ 記録しました';
+    el.rankResult.textContent = 'この端末に記録(サーバー未設定)';
+  } else {
+    el.rankSend.disabled = false;
+    el.rankSend.textContent = '🏆 もう一度試す';
+    el.rankResult.classList.add('err');
+    el.rankResult.textContent = res.error === 'timeout'
+      ? '⚠ 通信がタイムアウトしました' : '⚠ 送信に失敗しました。通信状況をご確認ください';
+  }
+});
+
+function openRank(from) {
+  rankFrom = from || 'title';
+  el.rank.classList.add('show');
+  loadRank();
+}
+async function loadRank() {
+  el.rankList.innerHTML = '<div class="rank-empty">読み込み中…</div>';
+  el.rankMode.textContent = LB.isOnline() ? '' : '📴 サーバー未設定 — この端末内の記録を表示中';
+  el.rankMode.classList.toggle('offline', !LB.isOnline());
+  const res = await LB.fetchTop(rankPeriod, 100);
+  renderRank(res);
+}
+function renderRank(res) {
+  if (res.error) {
+    el.rankList.innerHTML = `<div class="rank-empty">⚠ 読み込みに失敗しました<br>(${res.error === 'timeout' ? 'タイムアウト' : '通信エラー'})</div>`;
+    return;
+  }
+  if (!res.rows.length) {
+    el.rankList.innerHTML = '<div class="rank-empty">まだ記録がありません。<br>一番乗りを目指そう! 🚀</div>';
+    return;
+  }
+  el.rankList.innerHTML = res.rows.map((r, i) => {
+    const pos = i + 1;
+    const medal = pos === 1 ? '🥇' : pos === 2 ? '🥈' : pos === 3 ? '🥉' : pos;
+    const cls = ['rank-row', pos <= 3 ? 'top' + pos : '', r.mine ? 'me' : ''].filter(Boolean).join(' ');
+    return `<div class="${cls}">
+      <div class="rank-pos">${medal}</div>
+      <div class="rank-nm">${escapeHtml(r.name)}</div>
+      <div class="rank-wv">W${r.wave}</div>
+      <div class="rank-sc">${r.score.toLocaleString('en-US')}</div>
+    </div>`;
+  }).join('');
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+$('rank-btn').addEventListener('click', () => { Sfx.ui(); unlock(); openRank('title'); });
+$('go-rank').addEventListener('click', () => { Sfx.ui(); openRank('gameover'); });
+$('rank-refresh').addEventListener('click', () => { Sfx.ui(); loadRank(); });
+$('rank-close').addEventListener('click', () => {
+  Sfx.ui(); el.rank.classList.remove('show');
+  if (rankFrom === 'title') refreshTitle();
+});
+el.rank.querySelectorAll('.rank-tab').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    if (tab.classList.contains('active')) return;
+    Sfx.ui();
+    el.rank.querySelectorAll('.rank-tab').forEach((t) => t.classList.toggle('active', t === tab));
+    rankPeriod = tab.dataset.period;
+    loadRank();
+  });
 });
 
 function refreshToggles() {
